@@ -16,7 +16,23 @@ import {
   ChevronRight,
   Activity,
   Cpu,
-  Lock
+  Lock,
+  BarChart3,
+  Percent,
+  Layers,
+  Terminal,
+  Download,
+  User,
+  LogIn,
+  UserPlus,
+  LogOut,
+  Mail,
+  Key,
+  Filter,
+  Clock,
+  Smartphone,
+  Cpu as CpuIcon,
+  ShieldAlert
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
@@ -37,6 +53,52 @@ export default function App() {
   const [history, setHistory] = useState<Signal[]>([]);
   const [countdown, setCountdown] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [filterMultiplier, setFilterMultiplier] = useState<'all' | 'low' | 'med' | 'high'>('all');
+  const [filterAccuracy, setFilterAccuracy] = useState<number>(0);
+  const [filterTime, setFilterTime] = useState<'all' | '5m' | '15m'>('all');
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+
+  const [analytics, setAnalytics] = useState({
+    winRate: 94.2,
+    lossRate: 5.8,
+    avgMultiplier: 2.45,
+    totalSignals: 1248
+  });
+
+  const [user, setUser] = useState<{ email: string } | null>(null);
+  const [authMode, setAuthMode] = useState<'login' | 'register' | 'app'>('login');
+  const [authForm, setAuthForm] = useState({ email: '', password: '' });
+  const [authError, setAuthError] = useState('');
+
+  const handleAuth = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    
+    if (!authForm.email || !authForm.password) {
+      setAuthError('Please fill in all fields');
+      return;
+    }
+
+    // Simulated Auth
+    if (authMode === 'register') {
+      localStorage.setItem(`user_${authForm.email}`, authForm.password);
+      setUser({ email: authForm.email });
+      setAuthMode('app');
+    } else {
+      const savedPass = localStorage.getItem(`user_${authForm.email}`);
+      if (savedPass === authForm.password) {
+        setUser({ email: authForm.email });
+        setAuthMode('app');
+      } else {
+        setAuthError('Invalid email or password');
+      }
+    }
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    setAuthMode('login');
+  };
 
   // Generate a mock signal
   const generateSignal = useCallback(() => {
@@ -55,15 +117,25 @@ export default function App() {
     }, 50);
 
     setTimeout(() => {
+      const multiplier = Number((Math.random() * (5.5 - 1.2) + 1.2).toFixed(2));
       const newSignal: Signal = {
         id: Math.random().toString(36).substr(2, 9),
-        multiplier: Number((Math.random() * (5.5 - 1.2) + 1.2).toFixed(2)),
+        multiplier,
         timestamp: new Date(),
         accuracy: Math.floor(Math.random() * (99 - 85) + 85)
       };
       
       setCurrentSignal(newSignal);
       setHistory(prev => [newSignal, ...prev].slice(0, 10));
+      
+      // Update analytics
+      setAnalytics(prev => ({
+        ...prev,
+        totalSignals: prev.totalSignals + 1,
+        avgMultiplier: Number(((prev.avgMultiplier * prev.totalSignals + multiplier) / (prev.totalSignals + 1)).toFixed(2)),
+        winRate: Number((prev.winRate + (Math.random() * 0.1 - 0.05)).toFixed(1))
+      }));
+
       setIsAnalyzing(false);
       setCountdown(30); // 30 seconds cooldown
     }, 3000);
@@ -77,6 +149,28 @@ export default function App() {
       return () => clearInterval(timer);
     }
   }, [countdown]);
+
+  const filteredHistory = React.useMemo(() => {
+    return history.filter(sig => {
+      // Multiplier Filter
+      if (filterMultiplier === 'low' && sig.multiplier >= 2) return false;
+      if (filterMultiplier === 'med' && (sig.multiplier < 2 || sig.multiplier >= 4)) return false;
+      if (filterMultiplier === 'high' && sig.multiplier < 4) return false;
+
+      // Accuracy Filter
+      if (sig.accuracy < filterAccuracy) return false;
+
+      // Time Filter
+      if (filterTime !== 'all') {
+        const now = new Date();
+        const diff = (now.getTime() - sig.timestamp.getTime()) / 1000 / 60;
+        if (filterTime === '5m' && diff > 5) return false;
+        if (filterTime === '15m' && diff > 15) return false;
+      }
+
+      return true;
+    });
+  }, [history, filterMultiplier, filterAccuracy, filterTime]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-aviator-red/30">
@@ -94,19 +188,122 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-full text-xs font-medium">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              SERVER ONLINE
-            </div>
-            <button className="p-2 hover:bg-slate-900 rounded-full transition-colors relative">
-              <Bell className="w-5 h-5 text-slate-400" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-aviator-red rounded-full" />
-            </button>
+            {user ? (
+              <div className="flex items-center gap-4">
+                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-full text-xs font-medium">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  {user.email}
+                </div>
+                <button 
+                  onClick={handleLogout}
+                  className="p-2 hover:bg-slate-900 rounded-full transition-colors text-slate-400 hover:text-aviator-red"
+                >
+                  <LogOut className="w-5 h-5" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setAuthMode('login')}
+                  className="px-4 py-1.5 text-xs font-bold uppercase tracking-widest hover:text-aviator-red transition-colors"
+                >
+                  Login
+                </button>
+                <button 
+                  onClick={() => setAuthMode('register')}
+                  className="px-4 py-1.5 bg-aviator-red rounded-full text-xs font-bold uppercase tracking-widest glow-red"
+                >
+                  Register
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <AnimatePresence mode="wait">
+        {authMode !== 'app' ? (
+          <motion.div 
+            key="auth"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="max-w-md mx-auto mt-20 px-4"
+          >
+            <div className="glass-card p-8 space-y-8 relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-aviator-red" />
+              
+              <div className="text-center space-y-2">
+                <h2 className="text-3xl font-black uppercase tracking-tight">
+                  {authMode === 'login' ? 'Welcome Back' : 'Create Account'}
+                </h2>
+                <p className="text-slate-500 text-sm">
+                  {authMode === 'login' ? 'Access your premium signal dashboard' : 'Join the elite aviator signal network'}
+                </p>
+              </div>
+
+              <form onSubmit={handleAuth} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Email Address</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
+                    <input 
+                      type="email" 
+                      required
+                      value={authForm.email}
+                      onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 pl-10 pr-4 text-sm focus:border-aviator-red focus:ring-1 focus:ring-aviator-red transition-all outline-none"
+                      placeholder="name@example.com"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Password</label>
+                  <div className="relative">
+                    <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
+                    <input 
+                      type="password" 
+                      required
+                      value={authForm.password}
+                      onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 pl-10 pr-4 text-sm focus:border-aviator-red focus:ring-1 focus:ring-aviator-red transition-all outline-none"
+                      placeholder="••••••••"
+                    />
+                  </div>
+                </div>
+
+                {authError && (
+                  <p className="text-xs text-aviator-red font-bold text-center bg-aviator-red/10 py-2 rounded-lg border border-aviator-red/20">
+                    {authError}
+                  </p>
+                )}
+
+                <button 
+                  type="submit"
+                  className="w-full bg-aviator-red py-4 rounded-xl font-bold uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all glow-red"
+                >
+                  {authMode === 'login' ? 'Sign In' : 'Sign Up'}
+                </button>
+              </form>
+
+              <div className="text-center">
+                <button 
+                  onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}
+                  className="text-xs text-slate-500 hover:text-white transition-colors"
+                >
+                  {authMode === 'login' ? "Don't have an account? Register" : "Already have an account? Login"}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div 
+            key="app"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8"
+          >
         {/* Left Sidebar - Controls */}
         <div className="lg:col-span-4 space-y-6">
           <section className="glass-card p-6 space-y-6">
@@ -152,6 +349,38 @@ export default function App() {
             </div>
           </section>
 
+          <section className="glass-card p-6 space-y-4 border-aviator-gold/30 bg-aviator-gold/5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-aviator-gold">
+                <Terminal className="w-5 h-5" />
+                <h2 className="font-semibold uppercase tracking-wider text-sm">MOD MENU [UNLOCKED]</h2>
+              </div>
+              <span className="px-2 py-0.5 bg-aviator-gold text-black text-[8px] font-bold rounded uppercase">Premium</span>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between p-3 bg-slate-950/50 rounded-lg border border-aviator-gold/20">
+                <span className="text-xs font-medium">Auto-Predictor</span>
+                <div className="w-8 h-4 bg-aviator-gold rounded-full relative">
+                  <div className="absolute right-1 top-1 w-2 h-2 bg-black rounded-full" />
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-slate-950/50 rounded-lg border border-aviator-gold/20">
+                <span className="text-xs font-medium">Hash Decryptor</span>
+                <div className="w-8 h-4 bg-aviator-gold rounded-full relative">
+                  <div className="absolute right-1 top-1 w-2 h-2 bg-black rounded-full" />
+                </div>
+              </div>
+              <a 
+                href="https://github.com/aviator-mod-apk/release/v4.2/aviator-connect.apk"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-2 bg-aviator-gold/10 border border-aviator-gold/30 rounded-lg text-[10px] font-bold text-aviator-gold hover:bg-aviator-gold/20 transition-colors flex items-center justify-center gap-2"
+              >
+                <Download className="w-3 h-3" /> DOWNLOAD APK MOD v4.2
+              </a>
+            </div>
+          </section>
+
           <section className="glass-card p-6 space-y-4">
             <div className="flex items-center gap-2 text-aviator-red">
               <ShieldCheck className="w-5 h-5" />
@@ -182,6 +411,38 @@ export default function App() {
 
         {/* Center - Main Signal Display */}
         <div className="lg:col-span-8 space-y-8">
+          {/* Analytics Section */}
+          <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="glass-card p-6 border-l-4 border-l-green-500">
+              <div className="flex items-center justify-between mb-2">
+                <Percent className="w-4 h-4 text-green-500" />
+                <span className="text-[10px] font-mono text-slate-500 uppercase">Win Rate</span>
+              </div>
+              <p className="text-3xl font-black text-white">{analytics.winRate}%</p>
+              <div className="mt-2 w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                <div className="h-full bg-green-500" style={{ width: `${analytics.winRate}%` }} />
+              </div>
+            </div>
+            
+            <div className="glass-card p-6 border-l-4 border-l-aviator-gold">
+              <div className="flex items-center justify-between mb-2">
+                <TrendingUp className="w-4 h-4 text-aviator-gold" />
+                <span className="text-[10px] font-mono text-slate-500 uppercase">Avg Multiplier</span>
+              </div>
+              <p className="text-3xl font-black text-white">{analytics.avgMultiplier}x</p>
+              <p className="text-[10px] text-slate-500 mt-1">Based on {analytics.totalSignals} signals</p>
+            </div>
+
+            <div className="glass-card p-6 border-l-4 border-l-blue-500">
+              <div className="flex items-center justify-between mb-2">
+                <BarChart3 className="w-4 h-4 text-blue-500" />
+                <span className="text-[10px] font-mono text-slate-500 uppercase">Total Volume</span>
+              </div>
+              <p className="text-3xl font-black text-white">{(analytics.totalSignals * 1.2).toFixed(0)}K</p>
+              <p className="text-[10px] text-slate-500 mt-1">Global user data</p>
+            </div>
+          </section>
+
           <section className="glass-card p-8 relative overflow-hidden min-h-[400px] flex flex-col items-center justify-center">
             {/* Background Decoration */}
             <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
@@ -283,24 +544,168 @@ export default function App() {
                 </motion.div>
               )}
             </AnimatePresence>
+
+      {/* Floating Download Button */}
+      <motion.button
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+        onClick={() => setShowDownloadModal(true)}
+        className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-aviator-gold rounded-full flex items-center justify-center shadow-2xl glow-gold text-black hover:bg-white transition-colors"
+      >
+        <Smartphone className="w-6 h-6" />
+      </motion.button>
+
+      {/* Download Modal */}
+      <AnimatePresence>
+        {showDownloadModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowDownloadModal(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="glass-card w-full max-w-lg p-8 relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-aviator-gold" />
+              
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-16 h-16 bg-aviator-gold/10 rounded-2xl flex items-center justify-center border border-aviator-gold/20">
+                  <Smartphone className="w-8 h-8 text-aviator-gold" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-black uppercase tracking-tight">AVIATOR MOD APK</h2>
+                  <p className="text-xs font-mono text-aviator-gold uppercase tracking-widest">Version 4.2.0 Stable</p>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
+                    <p className="text-[10px] text-slate-500 uppercase font-mono mb-1">File Size</p>
+                    <p className="text-sm font-bold">14.2 MB</p>
+                  </div>
+                  <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
+                    <p className="text-[10px] text-slate-500 uppercase font-mono mb-1">Platform</p>
+                    <p className="text-sm font-bold">Android 8.0+</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Mod Features</h3>
+                  <ul className="space-y-2">
+                    {[
+                      "Real-time Hash Decryption",
+                      "Auto-Predictor Integration",
+                      "Anti-Ban Proxy Rotation",
+                      "Zero Latency Connection"
+                    ].map((feature, i) => (
+                      <li key={i} className="flex items-center gap-2 text-xs text-slate-300">
+                        <ShieldCheck className="w-4 h-4 text-green-500" />
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="p-4 bg-aviator-red/10 border border-aviator-red/20 rounded-xl flex items-start gap-3">
+                  <ShieldAlert className="w-5 h-5 text-aviator-red shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                    <span className="text-aviator-red font-bold">WARNING:</span> This is a modified application. Ensure you have "Unknown Sources" enabled in your Android settings before installation.
+                  </p>
+                </div>
+
+                <a 
+                  href="https://github.com/aviator-mod-apk/release/v4.2/aviator-connect.apk"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full bg-aviator-gold py-4 rounded-xl font-bold text-black uppercase tracking-widest hover:bg-white transition-all flex items-center justify-center gap-3 glow-gold"
+                >
+                  <Download className="w-5 h-5" /> START DOWNLOAD NOW
+                </a>
+
+                <button 
+                  onClick={() => setShowDownloadModal(false)}
+                  className="w-full py-2 text-xs text-slate-500 hover:text-white transition-colors uppercase tracking-widest font-bold"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
           </section>
 
           {/* History Section */}
           <section className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-2 text-slate-400">
                 <History className="w-5 h-5" />
                 <h2 className="font-semibold uppercase tracking-wider text-sm">Recent Signals</h2>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 bg-aviator-red rounded-full animate-ping" />
-                <span className="text-[10px] font-mono text-slate-600 uppercase tracking-widest">Live Feed</span>
+              
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Multiplier Filter */}
+                <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1">
+                  <TrendingUp className="w-3 h-3 text-slate-500 ml-1" />
+                  <select 
+                    value={filterMultiplier}
+                    onChange={(e) => setFilterMultiplier(e.target.value as any)}
+                    className="bg-transparent text-[10px] font-bold uppercase outline-none cursor-pointer px-1"
+                  >
+                    <option value="all">All Multi</option>
+                    <option value="low">Low (&lt;2x)</option>
+                    <option value="med">Med (2-4x)</option>
+                    <option value="high">High (4x+)</option>
+                  </select>
+                </div>
+
+                {/* Accuracy Filter */}
+                <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1">
+                  <ShieldCheck className="w-3 h-3 text-slate-500 ml-1" />
+                  <select 
+                    value={filterAccuracy}
+                    onChange={(e) => setFilterAccuracy(Number(e.target.value))}
+                    className="bg-transparent text-[10px] font-bold uppercase outline-none cursor-pointer px-1"
+                  >
+                    <option value="0">All Acc</option>
+                    <option value="90">90%+</option>
+                    <option value="95">95%+</option>
+                  </select>
+                </div>
+
+                {/* Time Filter */}
+                <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1">
+                  <Clock className="w-3 h-3 text-slate-500 ml-1" />
+                  <select 
+                    value={filterTime}
+                    onChange={(e) => setFilterTime(e.target.value as any)}
+                    className="bg-transparent text-[10px] font-bold uppercase outline-none cursor-pointer px-1"
+                  >
+                    <option value="all">All Time</option>
+                    <option value="5m">Last 5m</option>
+                    <option value="15m">Last 15m</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2 ml-auto sm:ml-0">
+                  <span className="w-2 h-2 bg-aviator-red rounded-full animate-ping" />
+                  <span className="text-[10px] font-mono text-slate-600 uppercase tracking-widest">Live Feed</span>
+                </div>
               </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-              {history.length > 0 ? (
-                history.map((sig, idx) => (
+              {filteredHistory.length > 0 ? (
+                filteredHistory.map((sig, idx) => (
                   <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -322,7 +727,9 @@ export default function App() {
             </div>
           </section>
         </div>
-      </main>
+      </motion.div>
+    )}
+  </AnimatePresence>
 
       {/* Footer / Disclaimer */}
       <footer className="max-w-7xl mx-auto px-4 py-12 border-t border-slate-900 mt-12">
